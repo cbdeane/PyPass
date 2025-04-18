@@ -9,26 +9,15 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 
 
-
-print("Welcome to PyPass")
-print("")
-print("For a list of commands, type 'help'")
-
-#global LOGGED_IN
-#global USER_TABLE
-#global PRIV_KEY_TABLE
-#global PUB_KEY_TABLE
-#global PASSWORD_LIST
-#global PASSWORD_DIRECTORY
-#global ACTIVE_USER
-
 LOGGED_IN = False
 USER_TABLE = {}
 PRIV_KEY_TABLE = {}
 PUB_KEY_TABLE = {}
 PASSWORD_LIST = {}
+USERNAME_LIST = {}
 PASSWORD_DIRECTORY = {}
 ACTIVE_USER = "PyPass"
+
 
 def debug():
     print("USER_TABLE: ", USER_TABLE)
@@ -137,8 +126,9 @@ def uuid_short():
 def get_username_from_user(prompt):
     username_input = input(prompt)
     username_encoded = username_input.encode('utf-8')
-    username_hash = hashlib.sha512(username_encoded).hexdigest()
-    return (username_input, username_hash)
+    username_hash512 = hashlib.sha512(username_encoded).hexdigest()
+    username_hash256 = hashlib.sha256(username_encoded).hexdigest()
+    return (username_input, username_hash512, username_hash256)
 
 
 #####################################################################################
@@ -262,10 +252,10 @@ def create_new_user():
     def instantiate_username():
 
         # get the username from the user
-        new_user_input = get_username_from_user("Enter a username: ")[1]
+        new_user_input = get_username_from_user("Enter a username: ")
 
         # make sure the username is not already in the user table
-        if new_user_input in USER_TABLE:
+        if new_user_input[1] in USER_TABLE:
             return (new_user_input, False)
         else:
             return (new_user_input, True)
@@ -330,14 +320,14 @@ def register_new_user():
         # generates the key that the user will use for passwords
         user_keys = generate_key_pair()
 
-        # adds in the format {username: password}
-        USER_TABLE[new_user[0]] = new_user[1]
+        # adds sha512 username in the format {username: password}
+        USER_TABLE[new_user[0][1]] = new_user[1]
 
-        # adds in the form {username: private_key}
-        PRIV_KEY_TABLE[new_user[0]] = user_keys[1]
+        # adds sha512 username in the form {username: private_key}
+        PRIV_KEY_TABLE[new_user[0][1]] = user_keys[1]
 
-        # adds in the form {username: public_key}
-        PUB_KEY_TABLE[new_user[0]] = user_keys[0]
+        # adds sha256 username in the form {username: public_key}
+        PUB_KEY_TABLE[new_user[0][2]] = user_keys[0]
 
         print("New user created successfully!")
 
@@ -387,12 +377,34 @@ def create_password():
 
         # if the passwords match then hash the username, encrypt the data, and return a tuple with the data
         if password_input == password_confirmation_input:
-            current_user_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
-            encrypted_password = encrypt_data(password_input, PUB_KEY_TABLE[current_user_hash])
-            encrypted_username = encrypt_data(username_input, PUB_KEY_TABLE[current_user_hash])
+            # get all the data in the proper format for structuring
+            current_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
+            encrypted_password = encrypt_data(password_input, PUB_KEY_TABLE[current_user_pub_hash])
+            encrypted_username = encrypt_data(username_input, PUB_KEY_TABLE[current_user_pub_hash])
+            encrypted_name = encrypt_data(name_input, PUB_KEY_TABLE[current_user_pub_hash])
+
+            # generate an index value for the hashmaps
             uuid = uuid_short()
-            PASSWORD_LIST[uuid] = (name_input, encrypted_username, encrypted_password)
-            PASSWORD_DIRECTORY[uuid] = current_user_hash
+
+            # generate all the variations of value for the hashmaps
+            uuid_sha512 = hashlib.sha512(uuid.encode('utf-8')).hexdigest()
+            uuid_sha256 = hashlib.sha256(uuid.encode('utf-8')).hexdigest()
+            uuid_encrypted = encrypt_data(uuid, PUB_KEY_TABLE[current_user_pub_hash])
+
+            # add the data to the hashmaps
+            # USERNAME_LIST is in the format {username_hash: (encrypted_name, encrypted_username)}
+            USERNAME_LIST[uuid_sha256] = (encrypted_name, encrypted_username)
+            # PASSWORD_LIST is in the format {uuid_sha512: encrypted_password}
+            PASSWORD_LIST[uuid_sha512] = encrypted_password
+
+            # PASSWORD_DIRECTORY is in the format {username_hash: [uuid_encrypted]}
+            # MUST EXCEPT KEYERROR BECAUSE THE USER MAY NOT HAVE ANY PASSWORDS
+            try:
+                PASSWORD_DIRECTORY[current_user_pub_hash].append(uuid_encrypted)
+            except KeyError:
+                PASSWORD_DIRECTORY[current_user_pub_hash] = [uuid_encrypted]
+
+            # return the function so that there arent cases of adding pass multiple times
             return
 
         # block the user out if they fail 3 times
@@ -402,6 +414,7 @@ def create_password():
         # give the user a message if the passwords to not match
         else:
             print("\nPasswords do not match, please try again.\n")
+
 
 #####################################################################################
 # THIS FUNCTION GETS THE USER INPUT AND PARSES INTO A LIST
@@ -423,18 +436,25 @@ def get_user_input():
     # split the user input into a list for parsing
     user_input = user_input.split()
 
-    #AVOID NONE ERRORS
-    if user_input == []:
-        user_input = [""]
-
     #return the final user input after processing
     return user_input
 
+
+#####################################################################################
+# THIS FUNCTION LOGS THE USER OUT
+#####################################################################################
+
 def logout_user():
+
+    # pulls global variables into scope
     global LOGGED_IN
     global ACTIVE_USER
+
+    #logs the user out and sets the active user to PyPass
     LOGGED_IN = False
     ACTIVE_USER = "PyPass"
+
+    # clears the terminal
     clear_terminal()
 
 
@@ -448,14 +468,13 @@ def logout_user():
 
 def match_input(input_list):
 
-    #global LOGGED_IN
-
-    
+    # rather than excepting a bunch of errors
+    # it is easier to just return if the input list is empty
+    if input_list == []:
+        return
 
     # VALUES THAT DONT HAVE OUTPUT SO THEY GO ABOVE THE PRINT STATEMENT
     match input_list[0]:
-        case "":
-            return
         case "clear":
             clear_terminal()
         case "exit":
