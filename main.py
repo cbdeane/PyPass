@@ -87,6 +87,7 @@ def display_help():
     print("  |  - logout: logs out the current user session         |")
     print("  |  - passwd: changes your PyPass password              |")
     print("  |  - view: views all passwords                         |")
+    print("  |  - reveal: reveals passwords in plaintext            |")
     print("  |  - add: adds a new password                          |")
     print("  |  - delete: deletes a password                        |")
     print("  |  - update: updates a password                        |")
@@ -106,6 +107,20 @@ def display_start():
     print("  |___________________________________________________|")
     print("")
 
+def reveal_instructions():
+    print("   ____________________________________________________")
+    print("  |                                                    |")
+    print("  |  reveal all - Displays all passwords in plaintext  |")
+    print("  |                                                    |")
+    print("  |  reveal uuid - Displays one password in plaintext  |")
+    print("  |                                                    |")
+    print("  |  For security reasons, it is reccomended to        |")
+    print("  |  only view one pass at a time.                     |")
+    print("  |                                                    |")
+    print("  |  Please remember to use the 'clear' command after  |")
+    print("  |  you have finished!                                |")
+    print("  |____________________________________________________|")
+    print("")
 
 
 
@@ -511,6 +526,107 @@ def show_passwords():
     except:
         print("Unable to print password table, please try again.")
 
+#####################################################################################
+# THIS FUNCTION REVEALS A LIST OF ALL PASSWORDS AVAILABLE TO THE USER
+#####################################################################################
+
+def reveal_passwords():
+    # get the necesary hashes for the active user
+    active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
+    active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
+
+    # gets the list of encrypted UUIDs for the active user
+    uuid_list = PASSWORD_DIRECTORY[active_user_pub_hash]
+
+    # create the lists for the UUIDs
+    uuid_plaintext = []
+    service_plaintext = []
+    username_stars = []
+    password_stars = []
+
+    # iterate through the list of UUIDs, decrypt and organize the data
+    for uuid in uuid_list:
+        # decrypt the UUID and append to respective list
+        decrypted_uuid = decrypt_data(uuid, PRIV_KEY_TABLE[active_user_priv_hash])
+        uuid_plaintext.append(decrypted_uuid)
+
+        # get the hashes of the UUID and append to their respective lists
+        uuid_sha512 = hashlib.sha512(decrypted_uuid.encode('utf-8')).hexdigest()
+        uuid_sha256 = hashlib.sha256(decrypted_uuid.encode('utf-8')).hexdigest()
+
+        # get the encrypted items from their respective data structures
+        encrypted_name = USERNAME_LIST[uuid_sha256][0]
+        encrypted_username = USERNAME_LIST[uuid_sha256][1]
+        encrypted_password = PASSWORD_LIST[uuid_sha512]
+
+        # decrypt the password and username
+        # because so much data may be sensitive it will only show stars
+        # the user must reveal passwords individually
+        password_stars.append(
+            decrypt_data(encrypted_password, PRIV_KEY_TABLE[active_user_priv_hash])
+        )
+        username_stars.append(
+            decrypt_data(encrypted_username, PRIV_KEY_TABLE[active_user_priv_hash])
+        )
+        service_plaintext.append(
+            decrypt_data(encrypted_name, PRIV_KEY_TABLE[active_user_priv_hash])
+        )
+        
+    try:
+        print_password_table(uuid_plaintext, service_plaintext, username_stars, password_stars)
+    except:
+        print("Unable to print password table, please try again.")
+
+
+#####################################################################################
+# THIS FUNCTION REVEALS A SINGLE PASSWORD TO THE USER
+#####################################################################################
+
+def reveal_password_uuid(uuid):
+
+    # get the active user private hash for decryption
+    active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
+
+    # get the necesary hashes for the uuid
+    uuid_512 = hashlib.sha512(uuid.encode('utf-8')).hexdigest()
+    uuid_256 = hashlib.sha256(uuid.encode('utf-8')).hexdigest()
+
+    # create the lists for the UUIDs
+    uuid_plaintext = [uuid]
+    service_plaintext = []
+    username_plaintext = []
+    password_plaintext = []
+
+    # append the decrypted data to the respective lists
+    service_plaintext.append(
+        decrypt_data(
+            USERNAME_LIST[uuid_256][0], 
+            PRIV_KEY_TABLE[active_user_priv_hash]
+        )
+    )
+
+    username_plaintext.append(
+        decrypt_data(
+            USERNAME_LIST[uuid_256][1], 
+            PRIV_KEY_TABLE[active_user_priv_hash]
+        )
+    )
+
+    password_plaintext.append(
+        decrypt_data(
+            PASSWORD_LIST[uuid_512], 
+            PRIV_KEY_TABLE[active_user_priv_hash]
+        )
+    )
+
+    #print the data
+    try:
+        print_password_table(uuid_plaintext, service_plaintext, username_plaintext, password_plaintext)
+    except:
+        print("Unable to print password table, please try again.")
+
+
+
 
 #####################################################################################
 # THIS COMMAND FORMATS THE FIRST COLUMN OF THE PASSWORD TABLE
@@ -584,6 +700,12 @@ def match_input(input_list):
     if input_list == []:
         return
 
+    print("input_list[0] is:", input_list[0])
+    try:
+        print("input_list[1] is:", input_list[1])
+    except:
+        print("input_list[1] is: None")
+
     # VALUES THAT DONT HAVE OUTPUT SO THEY GO ABOVE THE PRINT STATEMENT
     match input_list[0]:
         case "clear":
@@ -639,26 +761,23 @@ def match_input(input_list):
                         case "all":
                             reveal_passwords()
                         case _:
-                            try:
-                                reveal_password_uuid(input_list[1])
-                            except:
-                                reveal_instructions()
+                            reveal_password_uuid(input_list[1])
                 except:
                     reveal_instructions()
-            case "delete":
-                try:
-                    match input_list[1]:
-                        case _:
-                            delete_password(input_list[1])
-                except:
-                    delete_instructions()
-            case "update":
-                try:
-                    match input_list[1]:
-                        update_password(input_list[1])
-                except:
-                    update_instructions()
-                
+#            case "delete":
+#                try:
+#                    match input_list[1]:
+#                        case _:
+#                            delete_password(input_list[1])
+#                except:
+#                    delete_instructions()
+#            case "update":
+#                try:
+#                    match input_list[1]:
+#                        update_password(input_list[1])
+#                except:
+#                    update_instructions()
+#                
 
     # SPACE AFTER OUTPUT FOR CLARITY
     print("")
