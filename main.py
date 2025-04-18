@@ -404,6 +404,8 @@ def create_password():
             except KeyError:
                 PASSWORD_DIRECTORY[current_user_pub_hash] = [uuid_encrypted]
 
+            print("Password added successfully!")
+
             # return the function so that there arent cases of adding pass multiple times
             return
 
@@ -456,6 +458,103 @@ def logout_user():
 
     # clears the terminal
     clear_terminal()
+
+
+#####################################################################################
+# THIS FUNCTION SHOWS A LIST OF ALL PASSWORDS AVAILABLE TO THE USER
+#####################################################################################
+
+def show_passwords():
+    # get the necesary hashes for the active user
+    active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
+    active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
+
+    # gets the list of encrypted UUIDs for the active user
+    uuid_list = PASSWORD_DIRECTORY[active_user_pub_hash]
+
+    # create the lists for the UUIDs
+    uuid_plaintext = []
+    service_plaintext = []
+    username_stars = []
+    password_stars = []
+
+    # iterate through the list of UUIDs, decrypt and organize the data
+    for uuid in uuid_list:
+        # decrypt the UUID and append to respective list
+        decrypted_uuid = decrypt_data(uuid, PRIV_KEY_TABLE[active_user_priv_hash])
+        uuid_plaintext.append(decrypted_uuid)
+
+        # get the hashes of the UUID and append to their respective lists
+        uuid_sha512 = hashlib.sha512(decrypted_uuid.encode('utf-8')).hexdigest()
+        uuid_sha256 = hashlib.sha256(decrypted_uuid.encode('utf-8')).hexdigest()
+
+        # get the encrypted items from their respective data structures
+        encrypted_name = USERNAME_LIST[uuid_sha256][0]
+        encrypted_username = USERNAME_LIST[uuid_sha256][1]
+        encrypted_password = PASSWORD_LIST[uuid_sha512]
+
+        # decrypt the password and username
+        # because so much data may be sensitive it will only show stars
+        # the user must reveal passwords individually
+        password_stars.append(
+                len(decrypt_data(encrypted_password, PRIV_KEY_TABLE[active_user_priv_hash])) * "*"
+        )
+        username_stars.append(
+            len(decrypt_data(encrypted_username, PRIV_KEY_TABLE[active_user_priv_hash])) * "*"
+        )
+        service_plaintext.append(
+            decrypt_data(encrypted_name, PRIV_KEY_TABLE[active_user_priv_hash])
+        )
+        
+
+    try:
+        print_password_table(uuid_plaintext, service_plaintext, username_stars, password_stars)
+    except:
+        print("Unable to print password table, please try again.")
+
+def format_first_column(column):
+    longest_element = max(len(str(element)) for element in column)
+    result = []
+    for i in range(len(column)):
+        element = "  |   " + str(column[i]) + (" " * (longest_element - len(str(column[i])))) + "   |"
+        result.append(element)
+    return result
+
+
+def format_column(column):
+    longest_element = max(len(str(element)) for element in column)
+    result = []
+    for i in range(len(column)):
+        element = "   " + str(column[i]) + (" " * (longest_element - len(str(column[i])))) + "   |"
+        result.append(element)
+    return result
+
+def print_password_table(uuid, name, username, password):
+
+    # throw an error if the data is not the same length
+    assert len(uuid) == len(name) == len(username) == len(password), "Error: Data is not the same length"
+
+    # add the headers to each colmn
+    uuid_column = ['UUID:'] + uuid
+    name_column = ['Name:'] + name
+    username_column = ['Username:'] + username
+    password_column = ['Password:'] + password
+
+    # format all the columns        
+    uuid_column = format_first_column(uuid_column)
+    name_column = format_column(name_column)
+    username_column = format_column(username_column)
+    password_column = format_column(password_column)
+
+    # n is for number of spaces to take off
+    n = 1
+
+    print("  +" + "-" * (len(uuid_column[0]) + len(name_column[0]) + len(username_column[0]) + len(password_column[0]) - 1) + "+")
+
+    for i in range(len(uuid) + 1):
+        print(f"{uuid_column[i]} {name_column[i]} {username_column[i]} {password_column[i]}")
+
+    print("  +" + "-" * (len(uuid_column[0]) + len(name_column[0]) + len(username_column[0]) + len(password_column[0]) - 1) + "+")
 
 
 #####################################################################################
@@ -520,9 +619,16 @@ def match_input(input_list):
                 logout_user()
             case "add":
                 create_password()
+            case "view":
+                show_passwords()
 
     # SPACE AFTER OUTPUT FOR CLARITY
     print("")
+
+
+
+
+
 
 
 
