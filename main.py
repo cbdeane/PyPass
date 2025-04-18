@@ -9,20 +9,35 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 
 
-USER_TABLE = []
 
 print("Welcome to PyPass")
 print("")
 print("For a list of commands, type 'help'")
+
+#global LOGGED_IN
+#global USER_TABLE
+#global PRIV_KEY_TABLE
+#global PUB_KEY_TABLE
+#global PASSWORD_LIST
+#global PASSWORD_DIRECTORY
+#global ACTIVE_USER
 
 LOGGED_IN = False
 USER_TABLE = {}
 PRIV_KEY_TABLE = {}
 PUB_KEY_TABLE = {}
 PASSWORD_LIST = {}
-
+PASSWORD_DIRECTORY = {}
 ACTIVE_USER = "PyPass"
 
+def debug():
+    print("USER_TABLE: ", USER_TABLE)
+    print("PRIV_KEY_TABLE: ", PRIV_KEY_TABLE)
+    print("PUB_KEY_TABLE: ", PUB_KEY_TABLE)
+    print("PASSWORD_LIST: ", PASSWORD_LIST)
+    print("PASSWORD_DIRECTORY: ", PASSWORD_DIRECTORY)
+    print("ACTIVE_USER: ", ACTIVE_USER)
+    print("")
 
 #####################################################################################
 # THIS FUNCTION CLEARS THE SCREEN ON MULTIPLE OSes SO THE PROGRAM
@@ -207,12 +222,13 @@ def decrypt_data(ciphertext, private_key):
 # THIS FUNCTION LOGS THE USER IN
 #####################################################################################
         
-def login_user(user_table):
+def login_user():
 
     # NESTED FUNCTION TO CHECK IF THE USERNAME AND PASSWORD MATCH
-    def login_check(user_table, username, password):
-        if username[1] in user_table:
-            if user_table[username[1]] == password:
+    # username input for this function must be the hashed username
+    def login_check(username, password):
+        if username in USER_TABLE:
+            if USER_TABLE[username] == password:
                 return True
             else:
                 return False
@@ -220,35 +236,19 @@ def login_user(user_table):
     for i in range(3):
         username = get_username_from_user("Username: ")
         password = get_password_from_user("Password: ")
-        if login_check(user_table, username, password):
+        if login_check(username[1], password):
             print("Login successful!")
-            return (True, username[0])
+            global ACTIVE_USER
+            ACTIVE_USER = username[0]
+            global LOGGED_IN
+            LOGGED_IN = True
+            return
         elif i == 2:
             print("Login failed, 3 try limit reached")
-            return False
         else:
             print("Login failed, please try again.")
+
  
-#####################################################################################
-# THIS FUNCTION ADDS A NEW USER TO THE USER TABLE
-#####################################################################################
-
-def register_new_user(user_table, new_user, priv_key_table, pub_key_table):
-    if new_user:
-        # generates the key that the user will use for passwords
-        user_keys = generate_key_pair()
-
-        # adds in the format {username: password}
-        user_table[new_user[0]] = new_user[1]
-
-        # adds in the form {username: private_key}
-        priv_key_table[new_user[0]] = user_keys[1]
-
-        # adds in the form {username: public_key}
-        pub_key_table[new_user[0]] = user_keys[0]
-
-        print("New user created successfully!")
-
 #####################################################################################
 # THIS FUNCTION CREATES A NEW USER 
 # RETURN TYPE IS EITHER FALSE OR A TUPLE
@@ -257,11 +257,15 @@ def register_new_user(user_table, new_user, priv_key_table, pub_key_table):
 # INDEX 1 -> PASSWORD
 #####################################################################################
 
-def create_new_user(user_table):
+def create_new_user():
     # GETS THE USERNAME OF THE USER AND CHECKS IF IT ALREADY EXISTS
-    def instantiate_username(user_table):
+    def instantiate_username():
+
+        # get the username from the user
         new_user_input = get_username_from_user("Enter a username: ")[1]
-        if new_user_input in user_table:
+
+        # make sure the username is not already in the user table
+        if new_user_input in USER_TABLE:
             return (new_user_input, False)
         else:
             return (new_user_input, True)
@@ -278,7 +282,7 @@ def create_new_user(user_table):
     # AFTER 3 FAILED ATTEMPTS, IT RETURNS FALSE AND EXITS THE FUNCTION
     new_user_input = None
     for i in range (3):
-        username_creation_tuple = instantiate_username(user_table)
+        username_creation_tuple = instantiate_username()
         if username_creation_tuple[1]:
             new_user_input = username_creation_tuple[0]
             break
@@ -310,20 +314,49 @@ def create_new_user(user_table):
 
 
 #####################################################################################
+# THIS FUNCTION ADDS A NEW USER TO THE USER TABLE
+#####################################################################################
+
+def register_new_user():
+    
+    #create a new user before adding them to the user table
+    try:
+        new_user = create_new_user()
+    except:
+        print("Error: User could not be created")
+        return False
+    
+    if new_user:
+        # generates the key that the user will use for passwords
+        user_keys = generate_key_pair()
+
+        # adds in the format {username: password}
+        USER_TABLE[new_user[0]] = new_user[1]
+
+        # adds in the form {username: private_key}
+        PRIV_KEY_TABLE[new_user[0]] = user_keys[1]
+
+        # adds in the form {username: public_key}
+        PUB_KEY_TABLE[new_user[0]] = user_keys[0]
+
+        print("New user created successfully!")
+
+
+#####################################################################################
 # THIS FUNCTION CHANGES THE USER'S PASSWORD
 #####################################################################################
 
-def change_user_password(user_table, active_user):
+def change_user_password():
     for i in range(3):
         old_password = get_password_from_user("Enter your old password: ")
-        hashed_active_user = hashlib.sha512(active_user.encode('utf-8')).hexdigest()
-        if user_table[hashed_active_user] == old_password:
+        hashed_active_user = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
+        if USER_TABLE[hashed_active_user] == old_password:
             new_password = get_password_from_user("Enter your new password: ")
             new_password_confirmation = get_password_from_user("Confirm your new password: ")
             if new_password == new_password_confirmation:
-                user_table[hashed_active_user] = new_password
+                USER_TABLE[hashed_active_user] = new_password
                 print("\nPassword changed successfully!")
-                return (True, user_table)
+                return (True, USER_TABLE)
             else:
                 print("\nPasswords do not match, please try again.\n")
         elif i == 2:
@@ -339,21 +372,34 @@ def change_user_password(user_table, active_user):
 # (username_hash, name_input, encrypted_username, encrypted_password)
 #####################################################################################
 
-def create_password(current_user, pub_key_list):
+def create_password():
+
+    # get the name and username from the user
     name_input = input("Enter the quick-name for this account: ")
     username_input = input("Enter the username for this account: ")
+
+    #give the user 3 attempts
     for i in range (3):
+
+        # get the password from the user twice for confirmation
         password_input = getpass.getpass("Enter the password for this account: ")
         password_confirmation_input = getpass.getpass("Confirm the password for this account: ")
+
+        # if the passwords match then hash the username, encrypt the data, and return a tuple with the data
         if password_input == password_confirmation_input:
-            current_user_hash = hashlib.sha512(current_user.encode('utf-8')).hexdigest()
-            password_encoded = password_input.encode('utf-8')
-            username_encoded = username_input.encode('utf-8')
-            encrypted_password = encrypt_data(password_input, pub_key_list[current_user_hash])
-            encrypted_username = encrypt_data(username_input, pub_key_list[current_user_hash])
-            return (current_user_hash, name_input, encrypted_username, encrypted_password)
+            current_user_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
+            encrypted_password = encrypt_data(password_input, PUB_KEY_TABLE[current_user_hash])
+            encrypted_username = encrypt_data(username_input, PUB_KEY_TABLE[current_user_hash])
+            uuid = uuid_short()
+            PASSWORD_LIST[uuid] = (name_input, encrypted_username, encrypted_password)
+            PASSWORD_DIRECTORY[uuid] = current_user_hash
+            return
+
+        # block the user out if they fail 3 times
         elif i == 2:
             print("\nPasswords do not match, 3 try limit reached\n")
+
+        # give the user a message if the passwords to not match
         else:
             print("\nPasswords do not match, please try again.\n")
 
@@ -361,19 +407,35 @@ def create_password(current_user, pub_key_list):
 # THIS FUNCTION GETS THE USER INPUT AND PARSES INTO A LIST
 #####################################################################################
 
-def get_user_input(is_logged_in, active_user):
-    if is_logged_in:
-        user_input = input(active_user + " ~ ")
+def get_user_input():
+
+    # if the user is logged in give them a ~ on their prompt like linux
+    if LOGGED_IN:
+        user_input = input(ACTIVE_USER + " ~ ")
+
+    # if the user is not logged in give them a > on their prompt like windows or zsh
     else:
-        user_input = input(active_user + " > ")
+        user_input = input(ACTIVE_USER + " > ")
+
+    # always make user input lowercase so it is easier to match
     user_input = user_input.lower()
+
+    # split the user input into a list for parsing
     user_input = user_input.split()
 
     #AVOID NONE ERRORS
     if user_input == []:
         user_input = [""]
 
+    #return the final user input after processing
     return user_input
+
+def logout_user():
+    global LOGGED_IN
+    global ACTIVE_USER
+    LOGGED_IN = False
+    ACTIVE_USER = "PyPass"
+    clear_terminal()
 
 
 #####################################################################################
@@ -384,18 +446,36 @@ def get_user_input(is_logged_in, active_user):
 #####################################################################################
 #####################################################################################
 
-def match_input(input_list, logged_in, user_table, active_user, priv_key_table, pub_key_table, password_list):
+def match_input(input_list):
 
-    # VALUES THAT DONT HAVE OUTPUT SO THEY DONT NEED A SPACE
+    #global LOGGED_IN
+
+    
+
+    # VALUES THAT DONT HAVE OUTPUT SO THEY GO ABOVE THE PRINT STATEMENT
     match input_list[0]:
         case "":
-            return(logged_in, user_table, active_user, password_list)
+            return
         case "clear":
             clear_terminal()
         case "exit":
             exit_gracefully()
+        case "debug":
+            try:
+                if input_list[1] == "user_table":
+                    print(USER_TABLE)
+                elif input_list[1] == "priv_key_table":
+                    print(PRIV_KEY_TABLE)
+                elif input_list[1] == "pub_key_table":
+                    print(PUB_KEY_TABLE)
+                elif input_list[1] == "password_list":
+                    print(PASSWORD_LIST)
+                elif input_list[1] == "password_directory":
+                    print(PASSWORD_DIRECTORY)
+            except:
+                debug()
 
-    # VALUES THAT HAVE OUTPUT SO THEY NEED A SPACE
+    # VALUES THAT HAVE OUTPUT ARE BELOW THE PRINT STATEMENT BECAUSE THEY NEED A SPACE
     print("")
 
     match input_list[0]:
@@ -403,36 +483,27 @@ def match_input(input_list, logged_in, user_table, active_user, priv_key_table, 
             display_help()
         case "start":
             display_start()
+        case "whoami":
+            print(ACTIVE_USER)
 
-    if logged_in == False:
+    if LOGGED_IN == False:
         match input_list[0]:
             case "register":
-                register_new_user(user_table, create_new_user(user_table), priv_key_table,pub_key_table)
+                register_new_user()
             case "login":
-                login_result = login_user(user_table)
-                if login_result:
-                    logged_in = True
-                    active_user = login_result[1]
-                else:
-                    print("Login failed")
+                login_user()
 
-    if logged_in == True:
+    if LOGGED_IN == True:
         match input_list[0]:
             case "passwd":
-                change_user_password(user_table, active_user)
+                change_user_password()
             case "logout":
-                logged_in = False
-                active_user = "PyPass"
-                clear_terminal()
+                logout_user()
             case "add":
-                password_list[uuid_short()] = create_password(active_user, pub_key_table)
-
+                create_password()
 
     # SPACE AFTER OUTPUT FOR CLARITY
     print("")
-
-    # RETURN THE UPDATED VARIABLES
-    return (logged_in, user_table, active_user, password_list)
 
 
 
@@ -445,25 +516,13 @@ def match_input(input_list, logged_in, user_table, active_user, priv_key_table, 
 #####################################################################################
 
 display_splashscreen()
-print(PASSWORD_LIST)
 
 # using a try here so that I can except KeyboardInterrupt
 try:
     while True:
 
-        # set the prompt
-        user_input = get_user_input(LOGGED_IN, ACTIVE_USER)
-        
-        print(PASSWORD_LIST)
-
-        # match the input
-        parser_result = match_input(user_input, LOGGED_IN, USER_TABLE, ACTIVE_USER, PRIV_KEY_TABLE, PUB_KEY_TABLE, PASSWORD_LIST)
-
-        # update global variables
-        LOGGED_IN = parser_result[0]
-        USER_TABLE = parser_result[1]
-        ACTIVE_USER = parser_result[2]
-        PASSWORD_LIST = parser_result[3]
+        # gather and match the input
+        match_input(get_user_input())
 
 # if the user presses ctrl+c, exit gracefully rather than making an ugly error message
 except KeyboardInterrupt:
