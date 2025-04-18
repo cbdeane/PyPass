@@ -506,13 +506,17 @@ def show_passwords():
             decrypt_data(encrypted_name, PRIV_KEY_TABLE[active_user_priv_hash])
         )
         
-
     try:
         print_password_table(uuid_plaintext, service_plaintext, username_stars, password_stars)
     except:
         print("Unable to print password table, please try again.")
 
+
+#####################################################################################
+# THIS COMMAND FORMATS THE FIRST COLUMN OF THE PASSWORD TABLE
+#####################################################################################
 def format_first_column(column):
+    #format each element to have line dividers, and make it so each string is the same length
     longest_element = max(len(str(element)) for element in column)
     result = []
     for i in range(len(column)):
@@ -521,7 +525,11 @@ def format_first_column(column):
     return result
 
 
+#####################################################################################
+# THIS COMMAND FORMATS THE COLUMNS FOR THE PASSWORD TABLE
+#####################################################################################
 def format_column(column):
+    # format each element to have line dividers, and make it so each string is the same length
     longest_element = max(len(str(element)) for element in column)
     result = []
     for i in range(len(column)):
@@ -529,6 +537,10 @@ def format_column(column):
         result.append(element)
     return result
 
+
+#####################################################################################
+# THIS COMMAND PRINTS THE PASSWORD TABLE
+#####################################################################################
 def print_password_table(uuid, name, username, password):
 
     # throw an error if the data is not the same length
@@ -546,14 +558,14 @@ def print_password_table(uuid, name, username, password):
     username_column = format_column(username_column)
     password_column = format_column(password_column)
 
-    # n is for number of spaces to take off
-    n = 1
-
+    #print the topbar
     print("  +" + "-" * (len(uuid_column[0]) + len(name_column[0]) + len(username_column[0]) + len(password_column[0]) - 1) + "+")
 
+    #print the data
     for i in range(len(uuid) + 1):
         print(f"{uuid_column[i]} {name_column[i]} {username_column[i]} {password_column[i]}")
 
+    #print the bottom bar
     print("  +" + "-" * (len(uuid_column[0]) + len(name_column[0]) + len(username_column[0]) + len(password_column[0]) - 1) + "+")
 
 
@@ -621,16 +633,35 @@ def match_input(input_list):
                 create_password()
             case "view":
                 show_passwords()
+            case "reveal":
+                try:
+                    match input_list[1]:
+                        case "all":
+                            reveal_passwords()
+                        case _:
+                            try:
+                                reveal_password_uuid(input_list[1])
+                            except:
+                                reveal_instructions()
+                except:
+                    reveal_instructions()
+            case "delete":
+                try:
+                    match input_list[1]:
+                        case _:
+                            delete_password(input_list[1])
+                except:
+                    delete_instructions()
+            case "update":
+                try:
+                    match input_list[1]:
+                        update_password(input_list[1])
+                except:
+                    update_instructions()
+                
 
     # SPACE AFTER OUTPUT FOR CLARITY
     print("")
-
-
-
-
-
-
-
 
 #####################################################################################
 #####################################################################################
@@ -652,9 +683,3 @@ try:
 # if the user presses ctrl+c, exit gracefully rather than making an ugly error message
 except KeyboardInterrupt:
     exit_gracefully()
-    
-        
-
-
-
-        
