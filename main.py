@@ -485,7 +485,11 @@ def show_passwords():
     active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
 
     # gets the list of encrypted UUIDs for the active user
-    uuid_list = PASSWORD_DIRECTORY[active_user_pub_hash]
+    try:
+        uuid_list = PASSWORD_DIRECTORY[active_user_pub_hash]
+    except KeyError:
+        print("No passwords found for this user.")
+
 
     # create the lists for the UUIDs
     uuid_plaintext = []
@@ -536,7 +540,10 @@ def reveal_passwords():
     active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
 
     # gets the list of encrypted UUIDs for the active user
-    uuid_list = PASSWORD_DIRECTORY[active_user_pub_hash]
+    try:
+        uuid_list = PASSWORD_DIRECTORY[active_user_pub_hash]
+    except KeyError:
+        print("No passwords found for this user.")
 
     # create the lists for the UUIDs
     uuid_plaintext = []
@@ -586,6 +593,19 @@ def reveal_password_uuid(uuid):
 
     # get the active user private hash for decryption
     active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
+    active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
+
+    # check for errors, or to see if the uuid might not belong to the user.
+    try:
+        for id in PASSWORD_DIRECTORY[active_user_pub_hash]:
+            if uuid == decrypt_data(id, PRIV_KEY_TABLE[active_user_priv_hash]):
+                pass
+            else:
+                print("UUID not found for this user.")
+                return
+    except KeyError:
+        print("UUID not found for this user.")
+        return
 
     # get the necesary hashes for the uuid
     uuid_512 = hashlib.sha512(uuid.encode('utf-8')).hexdigest()
