@@ -85,6 +85,7 @@ def display_help():
     print("  |  - register: registers a new user                    |")
     print("  |  - login: logs in an existing user account           |")
     print("  |  - logout: logs out the current user session         |")
+    print("  |  - whoami: shows the active user (also in prompt)    |")
     print("  |  - passwd: changes your PyPass password              |")
     print("  |  - view: views all passwords                         |")
     print("  |  - reveal: reveals passwords in plaintext            |")
@@ -142,7 +143,7 @@ def update_instructions():
 
 
 #####################################################################################
-# THISH FUNCTION CREATES A SHORTENED UUID FOR THE PASSWORD HASH TABLE INDEXES
+# THIS FUNCTION CREATES A SHORTENED UUID FOR THE PASSWORD HASH TABLE INDEXES
 #####################################################################################
 def uuid_short():
     return uuid.uuid4().hex[:6]
@@ -155,10 +156,20 @@ def uuid_short():
 #####################################################################################
 
 def get_username_from_user(prompt):
+
+    #gather username input
     username_input = input(prompt)
+
+    # remove any whitespace and make it lowercase for validation
+    username_input = username_input.strip()
+    username_input = username_input.lower()
+
+    # perform the hashing
     username_encoded = username_input.encode('utf-8')
     username_hash512 = hashlib.sha512(username_encoded).hexdigest()
     username_hash256 = hashlib.sha256(username_encoded).hexdigest()
+
+    # return the tuple
     return (username_input, username_hash512, username_hash256)
 
 
@@ -168,6 +179,8 @@ def get_username_from_user(prompt):
 #####################################################################################
 
 def get_password_from_user(prompt):
+    # immediately hash upon input
+    # no need to remove whitespace and make it lowercase before hashing
     password_input = getpass.getpass(prompt).encode('utf-8')
     password_input = hashlib.sha512(password_input).hexdigest()
     return password_input
@@ -200,7 +213,11 @@ def generate_key_pair():
 #####################################################################################
 
 def encrypt_data(data, public_key):
+    # nested function so that error handling can be done locally
     def encrypt_data_encoded(data, public_key):
+        # encrypt the data using the public key
+        # MFG1 is the mask generation function
+        # OAEP is the padding scheme
         encrypted_data = public_key.encrypt(
             data,
             padding.OAEP(
@@ -210,6 +227,9 @@ def encrypt_data(data, public_key):
             )
         )
         return encrypted_data
+
+    # try to encode the data, if it fails then encode it as utf-8
+    # if it  cannot be encrypted after encoding then return None
     try:
         encrypt_data_encoded(data, public_key)
     except TypeError:
@@ -227,6 +247,7 @@ def encrypt_data(data, public_key):
 #####################################################################################
 
 def decrypt_data(ciphertext, private_key):
+    # decrypt with the same scheme as the encryption
     bit_text = private_key.decrypt(
         ciphertext,
         padding.OAEP(
@@ -235,6 +256,8 @@ def decrypt_data(ciphertext, private_key):
             label=None
         )
     )
+
+    #decode the data before returning
     plaintext = bit_text.decode('utf-8')
     return plaintext
 
@@ -254,18 +277,31 @@ def login_user():
             else:
                 return False
     # CHECKS FOR INITIAL LOGIN
+    # GIVES THE USER 3 ATTEMPTS TO LOGIN
     for i in range(3):
+        # gather login information
         username = get_username_from_user("Username: ")
         password = get_password_from_user("Password: ")
+        # run a login check
         if login_check(username[1], password):
-            print("Login successful!")
+
+            # change the appropriate global variables on login
             global ACTIVE_USER
             ACTIVE_USER = username[0]
             global LOGGED_IN
             LOGGED_IN = True
+
+            # let the user know that login is successful
+            print("Login successful!")
+
             return
+
+        # if the login fails 3 times, give the user a message
         elif i == 2:
             print("Login failed, 3 try limit reached")
+            return
+
+        # if the login fails, give the user a message
         else:
             print("Login failed, please try again.")
 
@@ -285,9 +321,17 @@ def create_new_user():
         # get the username from the user
         new_user_input = get_username_from_user("Enter a username: ")
 
-        # make sure the username is not already in the user table
+        # make sure the user is not using the default low-level user pypass
+        if new_user_input[0].lower() == "pypass":
+            print("Username cannot be 'PyPass'")
+            print("Please try again.")
+            return instantiate_username()
+
+        # make sure the hashed username is not already in the user table
         if new_user_input[1] in USER_TABLE:
-            return (new_user_input, False)
+            print("Username already exists")
+            print("Please try again.")
+            return instantiate_username()
         else:
             return (new_user_input, True)
 
@@ -301,6 +345,7 @@ def create_new_user():
     # GETS USERNAME
     # IF THE USERNAME IS NOT IN THE USER TABLE, IT CREATES A NEW USER
     # AFTER 3 FAILED ATTEMPTS, IT RETURNS FALSE AND EXITS THE FUNCTION
+    # new_user_input set to none so that it can be checked later
     new_user_input = None
     for i in range (3):
         username_creation_tuple = instantiate_username()
@@ -313,6 +358,7 @@ def create_new_user():
         else:
             print("\nUsername already exists, please try again.\n")
 
+    # check if new_user_input is None
     try:
         assert new_user_input != None, "Username is None, this should not happen"
     except AssertionError as e:
@@ -368,8 +414,13 @@ def register_new_user():
 #####################################################################################
 
 def change_user_password():
+    # gives the user 3 attempts to change their password
     for i in range(3):
+        # get the old password from the user
         old_password = get_password_from_user("Enter your old password: ")
+
+        # check if the old password matches the hashed active user
+        # if successful then the user has to enter the new password twice
         hashed_active_user = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
         if USER_TABLE[hashed_active_user] == old_password:
             new_password = get_password_from_user("Enter your new password: ")
@@ -529,8 +580,9 @@ def show_passwords():
         encrypted_password = PASSWORD_LIST[uuid_sha512]
 
         # decrypt the password and username
+        # append to the respective lists
         # because so much data may be sensitive it will only show stars
-        # the user must reveal passwords individually
+        # the user must reveal passwords explicitly in other functions
         password_stars.append(
                 len(decrypt_data(encrypted_password, PRIV_KEY_TABLE[active_user_priv_hash])) * "*"
         )
@@ -541,6 +593,7 @@ def show_passwords():
             decrypt_data(encrypted_name, PRIV_KEY_TABLE[active_user_priv_hash])
         )
         
+    # try to print by passing the lists through the print_password_table function
     try:
         print_password_table(uuid_plaintext, service_plaintext, username_stars, password_stars)
     except:
@@ -583,8 +636,7 @@ def reveal_passwords():
         encrypted_password = PASSWORD_LIST[uuid_sha512]
 
         # decrypt the password and username
-        # because so much data may be sensitive it will only show stars
-        # the user must reveal passwords individually
+        # append to the respective lists
         password_stars.append(
             decrypt_data(encrypted_password, PRIV_KEY_TABLE[active_user_priv_hash])
         )
@@ -595,6 +647,7 @@ def reveal_passwords():
             decrypt_data(encrypted_name, PRIV_KEY_TABLE[active_user_priv_hash])
         )
         
+    # try to print by passing the lists through the print_password_table function
     try:
         print_password_table(uuid_plaintext, service_plaintext, username_stars, password_stars)
     except:
@@ -670,7 +723,8 @@ def reveal_password_uuid(uuid):
 # THIS COMMAND FORMATS THE FIRST COLUMN OF THE PASSWORD TABLE
 #####################################################################################
 def format_first_column(column):
-    #format each element to have line dividers, and make it so each string is the same length
+    # format each element to have line dividers, and make it so each string is the same length
+    # this way theh table will be square, and the divider lines will be straight
     longest_element = max(len(str(element)) for element in column)
     result = []
     for i in range(len(column)):
@@ -684,6 +738,7 @@ def format_first_column(column):
 #####################################################################################
 def format_column(column):
     # format each element to have line dividers, and make it so each string is the same length
+    # this way theh table will be square, and the divider lines will be straight
     longest_element = max(len(str(element)) for element in column)
     result = []
     for i in range(len(column)):
@@ -840,24 +895,28 @@ def match_input(input_list):
             clear_terminal()
         case "exit":
             exit_gracefully()
-        case "debug":
-            try:
-                if input_list[1] == "user_table":
-                    print(USER_TABLE)
-                elif input_list[1] == "priv_key_table":
-                    print(PRIV_KEY_TABLE)
-                elif input_list[1] == "pub_key_table":
-                    print(PUB_KEY_TABLE)
-                elif input_list[1] == "password_list":
-                    print(PASSWORD_LIST)
-                elif input_list[1] == "password_directory":
-                    print(PASSWORD_DIRECTORY)
-            except:
-                debug()
+
+# THESE KEPT HERE FOR LINE DEBUGGING WARRIORS
+#
+#        case "debug":
+#            try:
+#                if input_list[1] == "user_table":
+#                    print(USER_TABLE)
+#                elif input_list[1] == "priv_key_table":
+#                    print(PRIV_KEY_TABLE)
+#                elif input_list[1] == "pub_key_table":
+#                    print(PUB_KEY_TABLE)
+#                elif input_list[1] == "password_list":
+#                    print(PASSWORD_LIST)
+#                elif input_list[1] == "password_directory":
+#                    print(PASSWORD_DIRECTORY)
+#            except:
+#                debug()
 
     # VALUES THAT HAVE OUTPUT ARE BELOW THE PRINT STATEMENT BECAUSE THEY NEED A SPACE
     print("")
 
+    # GLOBAL OPTIONS FOR ALL USERS
     match input_list[0]:
         case "help":
             display_help()
@@ -866,21 +925,35 @@ def match_input(input_list):
         case "whoami":
             print(ACTIVE_USER)
 
+    # OPTIONS FOR LOGGED OUT USERS
     if LOGGED_IN == False:
         match input_list[0]:
             case "register":
-                register_new_user()
+                try:
+                    register_new_user()
+                except KeyboardInterrupt:
+                    print ("\nRegistration cancelled.")
             case "login":
-                login_user()
+                try:
+                    login_user()
+                except KeyboardInterrupt:
+                    print ("\nLogin cancelled.")
 
+    # OPTIONS FOR LOGGED IN USERS
     if LOGGED_IN == True:
         match input_list[0]:
             case "passwd":
-                change_user_password()
+                try:
+                    change_user_password()
+                except KeyboardInterrupt:
+                    print ("\nPassword change cancelled.")
             case "logout":
                 logout_user()
             case "add":
-                create_password()
+                try:
+                    create_password()
+                except KeyboardInterrupt:
+                    print ("\nPassword creation cancelled.")
             case "view":
                 show_passwords()
             case "reveal":
@@ -903,7 +976,10 @@ def match_input(input_list):
                 try:
                     match input_list[1]:
                         case _:
-                            update_password(input_list[1])
+                            try:
+                                update_password(input_list[1])
+                            except KeyboardInterrupt:
+                                print ("\nPassword update cancelled.")
                 except:
                     update_instructions()
                 
