@@ -5,20 +5,218 @@ import platform
 import sys
 import uuid
 
+
+from base64 import b64encode, b64decode
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.backends import default_backend
 
 
-LOGGED_IN = False
-USER_TABLE = {}
-PRIV_KEY_TABLE = {}
-PUB_KEY_TABLE = {}
-PASSWORD_LIST = {}
-USERNAME_LIST = {}
-PASSWORD_DIRECTORY = {}
-ACTIVE_USER = "PyPass"
+#####################################################################################
+#####################################################################################
+#####################################################################################
+# THIS CLASS HANDLES ALL FILE OPERATIONS FOR THE PROGRAM
+#####################################################################################
+#####################################################################################
+#####################################################################################
+class FileManager:
+    #write the USER_TABLE to a CSV file
+    def write_user_table(self):
+        with open('user_table.csv', 'w') as f:
+            for username, password in USER_TABLE.items():
+                f.write(f"{username},{password}\n")
+
+    #write the PRIV_KEY_TABLE to a CSV file
+    def write_priv_key_table(self):
+        with open('priv_key_table.csv', 'w') as f:
+            for username, private_key in PRIV_KEY_TABLE.items():
+                private_pem = self.serialize_private_key(private_key)
+                f.write(f"{username},{private_pem}\n")
+
+    # write the PUB_KEY_TABLE to a CSV file
+    def write_pub_key_table(self):
+        with open('pub_key_table.csv', 'w') as f:
+            for username, public_key in PUB_KEY_TABLE.items():
+                public_pem = self.serialize_public_key(public_key)
+                f.write(f"{username},{public_pem}\n")
+
+    # write the PASSWORD_LIST to a CSV file
+    def write_password_list(self):
+        with open('password_list.csv', 'w') as f:
+            for uuid, password in PASSWORD_LIST.items():
+                password = b64encode(password).decode('utf-8')  # encode uuid to base64
+                f.write(f"{uuid},{password}\n")
+
+    # read the PASSWORD_LIST from a CSV file
+    def read_password_list(self):
+        try:
+            with open('password_list.csv', 'r') as f:
+                for line in f:
+                    uuid, password = line.strip().split(',')
+                    password = b64decode(password)  # decode uuid from base64
+                    PASSWORD_LIST[uuid] = password
+        except FileNotFoundError:
+            print("Password list file not found, starting with an empty password list.")
 
 
+    # write the USERNAME_LIST to a CSV file
+    def write_username_list(self):
+        with open('username_list.csv', 'w') as f:
+            for uuid, (name, username) in USERNAME_LIST.items():
+                f.write(f"{uuid},{name},{username}\n")
+
+    # read the USERNAME_LIST from a CSV file
+    def read_username_list(self):
+        try:
+            with open('username_list.csv', 'r') as f:
+                for line in f:
+                    uuid, name, username = line.strip().split(',')
+                    USERNAME_LIST[uuid] = (name, username)
+        except FileNotFoundError:
+            print("Username list file not found, starting with an empty username list.")
+
+    # write the PASSWORD_DIRECTORY to a CSV file
+    def write_password_directory(self):
+        with open('password_directory.csv', 'w') as f:
+            for user_hash in PASSWORD_DIRECTORY:
+                password_directory64 = {}
+                password_directory64[user_hash] = []
+                for uuid in PASSWORD_DIRECTORY[user_hash]:
+                    uuid64 = b64encode(uuid).decode()  # encode uuid to base64
+                    password_directory64[user_hash].append(uuid64)
+                uuid_string = ','.join(password_directory64[user_hash])
+                f.write(f"{user_hash},{uuid_string}\n")
+
+    # read the PASSWORD_DIRECTORY from a CSV file
+    def read_password_directory(self):
+        try:
+            with open('password_directory.csv', 'r') as f:
+                for line in f:
+                    parsed_list = line.strip().split(',')
+                    PASSWORD_DIRECTORY[parsed_list[0]] = []
+                    for i in range (1, len(parsed_list)):
+                        uuid64 = parsed_list[i]
+                        uuid = b64decode(uuid64)
+                        PASSWORD_DIRECTORY[parsed_list[0]] = uuid
+        except FileNotFoundError:
+            print("Password directory file not found, starting with an empty password directory.")
+
+    # read the USER_TABLE from a CSV file
+    def read_user_table(self):
+        try:
+            with open('user_table.csv', 'r') as f:
+                for line in f:
+                    username, password = line.strip().split(',')
+                    USER_TABLE[username] = password
+        except FileNotFoundError:
+            print("User table file not found, starting with an empty user table.")
+
+    # read the PRIV_KEY_TABLE from a CSV file
+    def read_priv_key_table(self):
+        try:
+            with open('priv_key_table.csv', 'r') as f:
+                for line in f:
+                    username, private_key = line.strip().split(',')
+                    private_key = self.recreate_private_key(private_key)
+                    private_keystring_rsa = self.deserialize_private_key(private_key)
+                    PRIV_KEY_TABLE[username] = private_keystring_rsa
+        except FileNotFoundError:
+            print("Private key table file not found, starting with an empty private key table.")
+
+    # read the PUB_KEY_TABLE from a CSV file
+    def read_pub_key_table(self):
+        try:
+            with open('pub_key_table.csv', 'r') as f:
+                for line in f:
+                    username, public_key = line.strip().split(',')
+                    public_key = self.recreate_public_key(public_key)
+
+                    public_key_rsa = self.deserialize_public_key(public_key)
+                    PUB_KEY_TABLE[username] = public_key_rsa
+                    return
+
+
+        except FileNotFoundError:
+            print("Public key table file not found, starting with an empty public key table.")
+
+    # loads all the files into memory
+    def bootstrap_files(self):
+        self.read_user_table()
+        self.read_priv_key_table()
+        self.read_pub_key_table()
+        self.read_password_list()
+        self.read_password_directory()
+        self.read_username_list()
+
+    def write_all_files(self):
+        self.write_user_table()
+        self.write_priv_key_table()
+        self.write_pub_key_table()
+        self.write_password_list()
+        self.write_password_directory()
+        self.write_username_list()
+
+    def deserialize_private_key(self, key_data):
+        private_key = None
+        private_key = serialization.load_pem_private_key(
+            key_data.encode('utf-8'),
+            password=None,
+            backend=default_backend()
+        )
+        return private_key
+
+    def deserialize_public_key(self, key_data):
+        public_key = serialization.load_pem_public_key(
+            key_data.encode('utf-8'),
+            backend=default_backend()
+        )
+        return public_key
+
+    def serialize_private_key(self, private_key):
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode('utf-8')
+        single_line_private_pem_list = private_pem.splitlines()
+        single_line_private_pem_list = single_line_private_pem_list[1:-1]
+        single_line_private_pem = ''.join(single_line_private_pem_list)
+        return single_line_private_pem
+
+    def serialize_public_key(self, public_key):
+        public_pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
+        single_line_public_pem_list = public_pem.splitlines()
+        single_line_public_pem_list = single_line_public_pem_list[1:-1]
+        single_line_public_pem = ''.join(single_line_public_pem_list)
+        return single_line_public_pem
+
+    def recreate_private_key(self, keystring):
+        private_key = '-----BEGIN PRIVATE KEY-----'
+        while len(keystring) > 64:
+            private_key += '\n' + keystring[:64]
+            keystring = keystring[64:]
+        if len(keystring) > 0:
+            private_key += '\n' + keystring
+        private_key += '\n-----END PRIVATE KEY-----'
+        return private_key
+
+
+    def recreate_public_key(self, keystring):
+        public_key = '-----BEGIN PUBLIC KEY-----'
+        while len(keystring) > 64:
+            public_key += '\n' + keystring[:64]
+            keystring = keystring[64:]
+        if len(keystring) > 0:
+            public_key += '\n' + keystring
+        public_key += '\n-----END PUBLIC KEY-----'
+        return public_key
+
+#####################################################################################
+# THIS FUNCTION IS FOR DEBUGGING PURPOSES
+#####################################################################################
 def debug():
     print("USER_TABLE: ", USER_TABLE)
     print("PRIV_KEY_TABLE: ", PRIV_KEY_TABLE)
@@ -897,21 +1095,21 @@ def match_input(input_list):
             exit_gracefully()
 
 # THESE KEPT HERE FOR LINE DEBUGGING WARRIORS
-#
-#        case "debug":
-#            try:
-#                if input_list[1] == "user_table":
-#                    print(USER_TABLE)
-#                elif input_list[1] == "priv_key_table":
-#                    print(PRIV_KEY_TABLE)
-#                elif input_list[1] == "pub_key_table":
-#                    print(PUB_KEY_TABLE)
-#                elif input_list[1] == "password_list":
-#                    print(PASSWORD_LIST)
-#                elif input_list[1] == "password_directory":
-#                    print(PASSWORD_DIRECTORY)
-#            except:
-#                debug()
+
+        case "debug":
+            try:
+                if input_list[1] == "user_table":
+                    print(USER_TABLE)
+                elif input_list[1] == "priv_key_table":
+                    print(PRIV_KEY_TABLE)
+                elif input_list[1] == "pub_key_table":
+                    print(PUB_KEY_TABLE)
+                elif input_list[1] == "password_list":
+                    print(PASSWORD_LIST)
+                elif input_list[1] == "password_directory":
+                    print(PASSWORD_DIRECTORY)
+            except:
+                debug()
 
     # VALUES THAT HAVE OUTPUT ARE BELOW THE PRINT STATEMENT BECAUSE THEY NEED A SPACE
     print("")
@@ -931,6 +1129,7 @@ def match_input(input_list):
             case "register":
                 try:
                     register_new_user()
+                    FILE_MANAGER.write_all_files()
                 except KeyboardInterrupt:
                     print ("\nRegistration cancelled.")
             case "login":
@@ -945,6 +1144,7 @@ def match_input(input_list):
             case "passwd":
                 try:
                     change_user_password()
+                    FILE_MANAGER.write_all_files()
                 except KeyboardInterrupt:
                     print ("\nPassword change cancelled.")
             case "logout":
@@ -952,6 +1152,7 @@ def match_input(input_list):
             case "add":
                 try:
                     create_password()
+                    FILE_MANAGER.write_all_files()
                 except KeyboardInterrupt:
                     print ("\nPassword creation cancelled.")
             case "view":
@@ -970,6 +1171,7 @@ def match_input(input_list):
                     match input_list[1]:
                         case _:
                             delete_password(input_list[1])
+                            FILE_MANAGER.write_all_files
                 except:
                     delete_instructions()
             case "update":
@@ -977,7 +1179,8 @@ def match_input(input_list):
                     match input_list[1]:
                         case _:
                             try:
-                                update_password(input_list[1])
+                                update_password(input_list[1]) 
+                                FILE_MANAGER.write_all_files()
                             except KeyboardInterrupt:
                                 print ("\nPassword update cancelled.")
                 except:
@@ -994,6 +1197,19 @@ def match_input(input_list):
 #####################################################################################
 #####################################################################################
 #####################################################################################
+
+
+LOGGED_IN = False
+USER_TABLE = {}
+PRIV_KEY_TABLE = {}
+PUB_KEY_TABLE = {}
+PASSWORD_LIST = {}
+USERNAME_LIST = {}
+PASSWORD_DIRECTORY = {}
+ACTIVE_USER = "PyPass"
+
+FILE_MANAGER = FileManager()
+FILE_MANAGER.bootstrap_files()
 
 display_splashscreen()
 
