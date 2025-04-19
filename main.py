@@ -112,7 +112,7 @@ def reveal_instructions():
     print("  |                                                    |")
     print("  |  reveal all - Displays all passwords in plaintext  |")
     print("  |                                                    |")
-    print("  |  reveal uuid - Displays one password in plaintext  |")
+    print("  |  reveal UUID - Displays one password in plaintext  |")
     print("  |                                                    |")
     print("  |  For security reasons, it is reccomended to        |")
     print("  |  only view one pass at a time.                     |")
@@ -122,7 +122,23 @@ def reveal_instructions():
     print("  |____________________________________________________|")
     print("")
 
+def delete_instructions():
+    print("   ____________________________________________________")
+    print("  |                                                    |")
+    print("  |  delete UUID - Deletes a password from the list    |")
+    print("  |                                                    |")
+    print("  |  To find your UUID, try the 'view' command.        |")
+    print("  |____________________________________________________|")
+    print("")
 
+def update_instructions():
+    print("   ____________________________________________________")
+    print("  |                                                    |")
+    print("  |  update UUID - Updates a password in the list      |")
+    print("  |                                                    |")
+    print("  |  To find your UUID, try the 'view' command.        |")
+    print("  |____________________________________________________|")
+    print("")
 
 
 #####################################################################################
@@ -596,6 +612,8 @@ def reveal_password_uuid(uuid):
     active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
 
     # check for errors, or to see if the uuid might not belong to the user.
+    # if there is a KeyError or the uuid isn't in the password directory then
+    # the function is returned
     try:
         for id in PASSWORD_DIRECTORY[active_user_pub_hash]:
             if uuid == decrypt_data(id, PRIV_KEY_TABLE[active_user_priv_hash]):
@@ -706,6 +724,102 @@ def print_password_table(uuid, name, username, password):
 
 
 #####################################################################################
+# THIS FUNCTION DELETES A PASSWORD FROM THE PASSWORD LIST
+#####################################################################################
+
+def delete_password(uuid):
+    # get the active user private hash for decryption
+    active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
+    active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
+
+    # check for errors, or to see if the uuid might not belong to the user.
+    # if there is a KeyError or the uuid isn't in the password directory then
+    # the function is returned
+    try:
+        for id in PASSWORD_DIRECTORY[active_user_pub_hash]:
+            if uuid == decrypt_data(id, PRIV_KEY_TABLE[active_user_priv_hash]):
+                pass
+            else:
+                print("UUID not found for this user.")
+                return
+    except KeyError:
+        print("UUID not found for this user.")
+        return
+
+    # get the uuid hashes  
+    uuid_512 = hashlib.sha512(uuid.encode('utf-8')).hexdigest()
+    uuid_256 = hashlib.sha256(uuid.encode('utf-8')).hexdigest()
+
+    # delete the data from the hashmaps
+    del USERNAME_LIST[uuid_256]
+    del PASSWORD_LIST[uuid_512]
+    
+    for password in PASSWORD_DIRECTORY[active_user_pub_hash]:
+        if uuid == decrypt_data(password, PRIV_KEY_TABLE[active_user_priv_hash]):
+            PASSWORD_DIRECTORY[active_user_pub_hash].remove(password)
+            break
+    
+    # test to make sure things are deleted and print success messages
+    print("running checks to confirm deletion...\n")
+    try:
+        assert uuid_256 not in USERNAME_LIST, "Error: UUID not deleted from USERNAME_LIST"
+        print("[*] PASSED CHECK 1/3")
+        assert uuid_512 not in PASSWORD_LIST, "Error: UUID not deleted from PASSWORD_LIST"
+        print("[*] PASSED CHECK 2/3")
+        assert uuid not in PASSWORD_DIRECTORY[active_user_pub_hash], "Error: UUID not deleted from PASSWORD_DIRECTORY"
+        print("[*] PASSED CHECK 3/3")
+    except AssertionError as e:
+        print(f"AssertionError: {e}")
+        print("\nError: Password not deleted")
+        return False
+    print("\nPassword deleted successfully!")
+    return True
+
+
+#####################################################################################
+# THIS FUNCTION UPDATES A PASSWORD IN THE PASSWORD LIST
+#####################################################################################
+def update_password(uuid):
+    # get the active user private hash for decryption
+    active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
+    active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
+
+    # check for errors, or to see if the uuid might not belong to the user.
+    # if there is a KeyError or the uuid isn't in the password directory then
+    # the function is returned
+    try:
+        for id in PASSWORD_DIRECTORY[active_user_pub_hash]:
+            if uuid == decrypt_data(id, PRIV_KEY_TABLE[active_user_priv_hash]):
+                pass
+            else:
+                print("UUID not found for this user.")
+                return
+    except KeyError:
+        print("UUID not found for this user.")
+        return
+
+    # get the uuid hashes  
+    uuid_512 = hashlib.sha512(uuid.encode('utf-8')).hexdigest()
+
+    for i in range(3):
+        # get the new password from the user
+        new_password = getpass.getpass("Enter your new password: ")
+        new_password_confirmation = getpass.getpass("Confirm your new password: ")
+
+        # check if the passwords match
+        if new_password == new_password_confirmation:
+            # encrypt the new password and update the hashmaps
+            encrypted_password = encrypt_data(new_password, PUB_KEY_TABLE[active_user_pub_hash])
+            PASSWORD_LIST[uuid_512] = encrypted_password
+            print("Password updated successfully!")
+            return True
+        elif i == 2:
+            print("\nPasswords do not match, 3 try limit reached\n")
+            return False
+        else:
+            print("Passwords do not match, please try again.")
+
+#####################################################################################
 #####################################################################################
 #####################################################################################
 # THIS IS WHERE ALL THE PARSING MAGIC HAPPENS
@@ -719,12 +833,6 @@ def match_input(input_list):
     # it is easier to just return if the input list is empty
     if input_list == []:
         return
-
-    print("input_list[0] is:", input_list[0])
-    try:
-        print("input_list[1] is:", input_list[1])
-    except:
-        print("input_list[1] is: None")
 
     # VALUES THAT DONT HAVE OUTPUT SO THEY GO ABOVE THE PRINT STATEMENT
     match input_list[0]:
@@ -784,20 +892,21 @@ def match_input(input_list):
                             reveal_password_uuid(input_list[1])
                 except:
                     reveal_instructions()
-#            case "delete":
-#                try:
-#                    match input_list[1]:
-#                        case _:
-#                            delete_password(input_list[1])
-#                except:
-#                    delete_instructions()
-#            case "update":
-#                try:
-#                    match input_list[1]:
-#                        update_password(input_list[1])
-#                except:
-#                    update_instructions()
-#                
+            case "delete":
+                try:
+                    match input_list[1]:
+                        case _:
+                            delete_password(input_list[1])
+                except:
+                    delete_instructions()
+            case "update":
+                try:
+                    match input_list[1]:
+                        case _:
+                            update_password(input_list[1])
+                except:
+                    update_instructions()
+                
 
     # SPACE AFTER OUTPUT FOR CLARITY
     print("")
