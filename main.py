@@ -11,6 +11,14 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.backends import default_backend
 
+LOGGED_IN = False
+USER_TABLE = {}
+PRIV_KEY_TABLE = {}
+PUB_KEY_TABLE = {}
+PASSWORD_LIST = {}
+USERNAME_LIST = {}
+PASSWORD_DIRECTORY = {}
+ACTIVE_USER = "PyPass"
 
 #####################################################################################
 #####################################################################################
@@ -868,18 +876,10 @@ def reveal_password_uuid(uuid):
     active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
     active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
 
-    # check for errors, or to see if the uuid might not belong to the user.
-    # if there is a KeyError or the uuid isn't in the password directory then
-    # the function is returned
-    try:
-        for id in PASSWORD_DIRECTORY[active_user_pub_hash]:
-            if uuid == decrypt_data(id, PRIV_KEY_TABLE[active_user_priv_hash]):
-                pass
-            else:
-                print("UUID not found for this user.")
-                return
-    except KeyError:
-        print("UUID not found for this user.")
+    if validate_uuid(uuid, active_user_pub_hash, active_user_priv_hash):
+        pass
+    else:
+        print("unable to validate UUID")
         return
 
     # get the necesary hashes for the uuid
@@ -981,6 +981,22 @@ def print_password_table(uuid, name, username, password):
     #print the bottom bar
     print("  +" + "-" * (len(uuid_column[0]) + len(name_column[0]) + len(username_column[0]) + len(password_column[0]) - 1) + "+")
 
+def validate_uuid(uuid, active_user_pub_hash, active_user_priv_hash):
+    # check for errors, or to see if the uuid might not belong to the user.
+    # if there is a KeyError or the uuid isn't in the password directory then
+    # the function is returned
+    if active_user_pub_hash in PASSWORD_DIRECTORY:
+        try:
+            for id in PASSWORD_DIRECTORY[active_user_pub_hash]:
+                if uuid == decrypt_data(id, PRIV_KEY_TABLE[active_user_priv_hash]):
+                    print("return true")
+                    return True
+        except KeyError:
+            print("UUID not found for this user.")
+            return
+    print("return False")
+    return False
+
 
 #####################################################################################
 # THIS FUNCTION DELETES A PASSWORD FROM THE PASSWORD LIST
@@ -991,23 +1007,17 @@ def delete_password(uuid):
     active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
     active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
 
-    # check for errors, or to see if the uuid might not belong to the user.
-    # if there is a KeyError or the uuid isn't in the password directory then
-    # the function is returned
-    try:
-        for id in PASSWORD_DIRECTORY[active_user_pub_hash]:
-            if uuid == decrypt_data(id, PRIV_KEY_TABLE[active_user_priv_hash]):
-                pass
-            else:
-                print("UUID not found for this user.")
-                return
-    except KeyError:
-        print("UUID not found for this user.")
+    if validate_uuid(uuid, active_user_pub_hash, active_user_priv_hash):
+        pass
+    else:
+        print("unable to validate UUID")
         return
 
     # get the uuid hashes  
     uuid_512 = hashlib.sha512(uuid.encode('utf-8')).hexdigest()
     uuid_256 = hashlib.sha256(uuid.encode('utf-8')).hexdigest()
+
+    print("uuid_512:\n", uuid_512)
 
     # delete the data from the hashmaps
     del USERNAME_LIST[uuid_256]
@@ -1204,18 +1214,10 @@ def match_input(input_list):
 #####################################################################################
 #####################################################################################
 
-
-LOGGED_IN = False
-USER_TABLE = {}
-PRIV_KEY_TABLE = {}
-PUB_KEY_TABLE = {}
-PASSWORD_LIST = {}
-USERNAME_LIST = {}
-PASSWORD_DIRECTORY = {}
-ACTIVE_USER = "PyPass"
-
 FILE_MANAGER = FileManager()
 FILE_MANAGER.bootstrap_files()
+
+
 
 display_splashscreen()
 
