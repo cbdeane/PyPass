@@ -144,12 +144,8 @@ class FileManager:
                 for line in f:
                     username, public_key = line.strip().split(',')
                     public_key = self.recreate_public_key(public_key)
-
                     public_key_rsa = self.deserialize_public_key(public_key)
                     PUB_KEY_TABLE[username] = public_key_rsa
-                    return
-
-
         except FileNotFoundError:
             print("Public key table file not found, starting with an empty public key table.")
 
@@ -1053,22 +1049,11 @@ def update_password(uuid):
     active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
     active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
 
-    # check for errors, or to see if the uuid might not belong to the user.
-    # if there is a KeyError or the uuid isn't in the password directory then
-    # the function is returned
-    try:
-        for id in PASSWORD_DIRECTORY[active_user_pub_hash]:
-            if uuid == decrypt_data(id, PRIV_KEY_TABLE[active_user_priv_hash]):
-                pass
-            else:
-                print("UUID not found for this user.")
-                return
-    except KeyError:
-        print("UUID not found for this user.")
+    if validate_uuid(uuid, active_user_pub_hash, active_user_priv_hash):
+        pass
+    else:
+        print("unable to validate UUID")
         return
-
-    # get the uuid hashes  
-    uuid_512 = hashlib.sha512(uuid.encode('utf-8')).hexdigest()
 
     for i in range(3):
         # get the new password from the user
@@ -1076,15 +1061,16 @@ def update_password(uuid):
         new_password_confirmation = getpass.getpass("Confirm your new password: ")
 
         # check if the passwords match
+        # if they match encrypt the password, and update the hashmaps
         if new_password == new_password_confirmation:
-            # encrypt the new password and update the hashmaps
             encrypted_password = encrypt_data(new_password, PUB_KEY_TABLE[active_user_pub_hash])
+            uuid_512 = hashlib.sha512(uuid.encode('utf-8')).hexdigest()
             PASSWORD_LIST[uuid_512] = encrypted_password
             print("Password updated successfully!")
-            return True
+            return
         elif i == 2:
             print("\nPasswords do not match, 3 try limit reached\n")
-            return False
+            return
         else:
             print("Passwords do not match, please try again.")
 
