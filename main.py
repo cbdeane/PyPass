@@ -63,14 +63,18 @@ class FileManager:
     def write_username_list(self):
         with open('username_list.csv', 'w') as f:
             for uuid, (name, username) in USERNAME_LIST.items():
-                f.write(f"{uuid},{name},{username}\n")
+                name64 = b64encode(name).decode('utf-8')
+                username64 = b64encode(username).decode('utf-8')
+                f.write(f"{uuid},{name64},{username64}\n")
 
     # read the USERNAME_LIST from a CSV file
     def read_username_list(self):
         try:
             with open('username_list.csv', 'r') as f:
                 for line in f:
-                    uuid, name, username = line.strip().split(',')
+                    uuid, name64, username64 = line.strip().split(',')
+                    name = b64decode(name64)
+                    username = b64decode(username64)
                     USERNAME_LIST[uuid] = (name, username)
         except FileNotFoundError:
             print("Username list file not found, starting with an empty username list.")
@@ -91,13 +95,15 @@ class FileManager:
     def read_password_directory(self):
         try:
             with open('password_directory.csv', 'r') as f:
+                global PASSWORD_DIRECTORY
+                PASSWORD_DIRECTORY = {}
                 for line in f:
                     parsed_list = line.strip().split(',')
                     PASSWORD_DIRECTORY[parsed_list[0]] = []
                     for i in range (1, len(parsed_list)):
                         uuid64 = parsed_list[i]
                         uuid = b64decode(uuid64)
-                        PASSWORD_DIRECTORY[parsed_list[0]] = uuid
+                        PASSWORD_DIRECTORY[parsed_list[0]].append(uuid)
         except FileNotFoundError:
             print("Password directory file not found, starting with an empty password directory.")
 
