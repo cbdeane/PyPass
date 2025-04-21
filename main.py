@@ -24,6 +24,7 @@
 #####################################################################################
 #####################################################################################
 
+# These libraries are imported to give several key aspects of functionality
 import hashlib
 import getpass
 import os
@@ -500,6 +501,7 @@ def generate_key_pair():
 
 #####################################################################################
 # THIS FUNCTION ENCRYPTS DATA USING THE PUBLIC KEY
+# THE NESTED FUNCTION encrypt_data_encoded IS USED TO HANDLE ENCODING ERRORS
 #####################################################################################
 
 def encrypt_data(data, public_key):
@@ -1166,7 +1168,8 @@ def update_password(uuid):
 
 
 #####################################################################################
-#
+# THIS FUNCTION DISPLAYS INFORMATION WHEN LOGGED_IN FUNCTIONS ARE USED
+# IN LOGGED_OUT MODE
 #####################################################################################
 def logged_out_user_using_logged_in_command():
     print("You must be logged in to use this command")
@@ -1237,6 +1240,8 @@ def match_input(input_list):
                     login_user()
                 except KeyboardInterrupt:
                     print ("\nLogin cancelled.")
+            # These commands are only available to logged in users
+            # so they will return a helper message
             case "passwd":
                 logged_out_user_using_logged_in_command()           
             case "logout":
@@ -1326,6 +1331,7 @@ display_splashscreen()
 
 # using a try here so that I can except KeyboardInterrupt
 try:
+    #have the program continue to run until the user exits
     while True:
 
         # gather and match the input
