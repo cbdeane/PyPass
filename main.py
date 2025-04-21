@@ -1,3 +1,29 @@
+#####################################################################################
+#####################################################################################
+#####################################################################################
+#####################################################################################
+#
+# IMPORTANT INFORMATION ABOUT THE ARCHITECTURE OF THIS PROGRAM:
+#
+# THE OVERALL DATA STRUCTURE IS IN THE FOLLOWING FORMAT:
+#
+#   AUTH:
+#       {USER_SHA512 : PASS_SHA512} -> user_table.csv
+#   
+#   ENCRYPTION:
+#       {USER_SHA512 : RSA_ENCRYPTED_PRIVATE_KEY} -> priv_key_table.csv
+#       {USER_SHA256 : RSA_ENCRYPTED_PUBLIC_KEY} -> pub_key_table.csv
+#       
+#   PASSWORD STORAGE:
+#       {UUID_SHA256 : (RSA_ENCRYPTED_SERVICE_NAME, RSA_ENCRYPTED_SERVICE_USERNAME)} -> username_list.csv
+#       {USER_SHA256 : [RSA_ENCRYPTED_UUID]} -> password_directory.csv
+#       {UUID_SHA512 : RSA_ENCRYPTED_PASSWORD} -> password_list.csv
+#
+#####################################################################################
+#####################################################################################
+#####################################################################################
+#####################################################################################
+
 import hashlib
 import getpass
 import os
@@ -11,6 +37,9 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.backends import default_backend
 
+#####################################################################################
+# INSTANTIATE THE GLOBAL VARIABLES
+#####################################################################################
 LOGGED_IN = False
 USER_TABLE = {}
 PRIV_KEY_TABLE = {}
@@ -1249,6 +1278,10 @@ def match_input(input_list):
                             reveal_passwords()
                         case _:
                             reveal_password_uuid(input_list[1])
+                    print("")
+                    print("IMPORTANT!")
+                    print("For security reasons, please clear your screen after revealing password data!")
+                    print("To clear your screen use the 'clear' command")
                 except:
                     reveal_instructions()
             case "delete":
