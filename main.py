@@ -45,6 +45,7 @@ class FileManager:
     def write_pub_key_table(self):
         with open('pub_key_table.csv', 'w') as f:
             for username, public_key in PUB_KEY_TABLE.items():
+                #Keys must be serialized prior to saving
                 public_pem = self.serialize_public_key(public_key)
                 f.write(f"{username},{public_pem}\n")
 
@@ -52,6 +53,7 @@ class FileManager:
     def write_password_list(self):
         with open('password_list.csv', 'w') as f:
             for uuid, password in PASSWORD_LIST.items():
+                #RSA encrypted data must be b64 encoded to save
                 password = b64encode(password).decode('utf-8')  # encode uuid to base64
                 f.write(f"{uuid},{password}\n")
 
@@ -61,16 +63,17 @@ class FileManager:
             with open('password_list.csv', 'r') as f:
                 for line in f:
                     uuid, password = line.strip().split(',')
+                    #must decode R64 that was used to save
                     password = b64decode(password)  # decode uuid from base64
                     PASSWORD_LIST[uuid] = password
         except FileNotFoundError:
             print("Password list file not found, starting with an empty password list.")
 
-
     # write the USERNAME_LIST to a CSV file
     def write_username_list(self):
         with open('username_list.csv', 'w') as f:
             for uuid, (name, username) in USERNAME_LIST.items():
+                #RSA encrypted data must be b64 encoded to save
                 name64 = b64encode(name).decode('utf-8')
                 username64 = b64encode(username).decode('utf-8')
                 f.write(f"{uuid},{name64},{username64}\n")
@@ -81,6 +84,7 @@ class FileManager:
             with open('username_list.csv', 'r') as f:
                 for line in f:
                     uuid, name64, username64 = line.strip().split(',')
+                    #must decode b64 that was used to save
                     name = b64decode(name64)
                     username = b64decode(username64)
                     USERNAME_LIST[uuid] = (name, username)
@@ -94,7 +98,8 @@ class FileManager:
                 password_directory64 = {}
                 password_directory64[user_hash] = []
                 for uuid in PASSWORD_DIRECTORY[user_hash]:
-                    uuid64 = b64encode(uuid).decode()  # encode uuid to base64
+                    #RSA encrypted data must be encoded with b64
+                    uuid64 = b64encode(uuid).decode()  
                     password_directory64[user_hash].append(uuid64)
                 uuid_string = ','.join(password_directory64[user_hash])
                 f.write(f"{user_hash},{uuid_string}\n")
@@ -110,6 +115,7 @@ class FileManager:
                     PASSWORD_DIRECTORY[parsed_list[0]] = []
                     for i in range (1, len(parsed_list)):
                         uuid64 = parsed_list[i]
+                        #must decode b64 that was used to save
                         uuid = b64decode(uuid64)
                         PASSWORD_DIRECTORY[parsed_list[0]].append(uuid)
         except FileNotFoundError:
@@ -131,7 +137,9 @@ class FileManager:
             with open('priv_key_table.csv', 'r') as f:
                 for line in f:
                     username, private_key = line.strip().split(',')
+                    # private keys must be recreated
                     private_key = self.recreate_private_key(private_key)
+                    # serialized data must be reconstructed 
                     private_keystring_rsa = self.deserialize_private_key(private_key)
                     PRIV_KEY_TABLE[username] = private_keystring_rsa
         except FileNotFoundError:
@@ -143,7 +151,9 @@ class FileManager:
             with open('pub_key_table.csv', 'r') as f:
                 for line in f:
                     username, public_key = line.strip().split(',')
+                    # public key must be recreated
                     public_key = self.recreate_public_key(public_key)
+                    # serialized data must be reconstructed
                     public_key_rsa = self.deserialize_public_key(public_key)
                     PUB_KEY_TABLE[username] = public_key_rsa
         except FileNotFoundError:
@@ -158,6 +168,7 @@ class FileManager:
         self.read_password_directory()
         self.read_username_list()
 
+    # writes  all files
     def write_all_files(self):
         self.write_user_table()
         self.write_priv_key_table()
@@ -166,6 +177,7 @@ class FileManager:
         self.write_password_directory()
         self.write_username_list()
 
+    # deserializes private keys
     def deserialize_private_key(self, key_data):
         private_key = None
         private_key = serialization.load_pem_private_key(
@@ -174,7 +186,8 @@ class FileManager:
             backend=default_backend()
         )
         return private_key
-
+    
+    # deserializes public keys
     def deserialize_public_key(self, key_data):
         public_key = serialization.load_pem_public_key(
             key_data.encode('utf-8'),
@@ -182,45 +195,65 @@ class FileManager:
         )
         return public_key
 
+    # serializes private keys
     def serialize_private_key(self, private_key):
         private_pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         ).decode('utf-8')
+        # this portion of the function breaks the key apart for storage on one line
         single_line_private_pem_list = private_pem.splitlines()
+        # this line removes the headers and footers
         single_line_private_pem_list = single_line_private_pem_list[1:-1]
+        # this puts the entire thing together again on a single line as a string
         single_line_private_pem = ''.join(single_line_private_pem_list)
         return single_line_private_pem
 
+    # serializes public keys
     def serialize_public_key(self, public_key):
         public_pem = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')
+        # this portion of the function breaks the key apart for storage on one line
         single_line_public_pem_list = public_pem.splitlines()
+        # this portion of the function removes the header and footer
         single_line_public_pem_list = single_line_public_pem_list[1:-1]
+        # this portion puts the entire thing back together again on one line
         single_line_public_pem = ''.join(single_line_public_pem_list)
         return single_line_public_pem
 
+    # this function recreates the key from a single line
+    # this is necessary before deserialization
     def recreate_private_key(self, keystring):
+        # write the header
         private_key = '-----BEGIN PRIVATE KEY-----'
+        # break the line into 64 char sections
         while len(keystring) > 64:
             private_key += '\n' + keystring[:64]
             keystring = keystring[64:]
+        # write the remainder to its own line (wont be an even 64 char)
         if len(keystring) > 0:
             private_key += '\n' + keystring
+        # write the footer
         private_key += '\n-----END PRIVATE KEY-----'
         return private_key
 
 
+    # this function recreates the key from a single line
+    # this is necessary before deserialization
     def recreate_public_key(self, keystring):
+        # write the header
         public_key = '-----BEGIN PUBLIC KEY-----'
+        # break the line into 64 char sections
         while len(keystring) > 64:
             public_key += '\n' + keystring[:64]
             keystring = keystring[64:]
+        # write the remainder to its own line 
         if len(keystring) > 0:
             public_key += '\n' + keystring
+        # write the footer
         public_key += '\n-----END PUBLIC KEY-----'
         return public_key
 
@@ -282,6 +315,10 @@ def display_splashscreen():
     print(r"                                                        ~--______-~                ~-___-~")
     print(r"                                       ")
 
+
+#####################################################################################
+# THIS FUNCTION DISPLAYS THE HELPBOX
+#####################################################################################
 def display_help():
     print("   ______________________________________________________")
     print("  |  Here are the commands you can use:                  |")
@@ -303,6 +340,10 @@ def display_help():
     print("  |______________________________________________________|")
     print("")
 
+
+#####################################################################################
+# THIS FUNCTION DISPLAYS THE START INSTRUCTIONS
+#####################################################################################
 def display_start():
     print("   ___________________________________________________ ")
     print("  |                                                   |")
@@ -316,6 +357,10 @@ def display_start():
     print("  |___________________________________________________|")
     print("")
 
+
+#####################################################################################
+# THIS FUNCTION DISPLAYS INSTRUCTIONS FOR THE 'REVEAL' COMMAND
+#####################################################################################
 def reveal_instructions():
     print("   ____________________________________________________")
     print("  |                                                    |")
@@ -331,6 +376,10 @@ def reveal_instructions():
     print("  |____________________________________________________|")
     print("")
 
+
+#####################################################################################
+# THIS FUNCTION DISPLAYS INSTRUCTIONS FOR THE 'DELETE' COMMAND
+#####################################################################################
 def delete_instructions():
     print("   ____________________________________________________")
     print("  |                                                    |")
@@ -340,6 +389,10 @@ def delete_instructions():
     print("  |____________________________________________________|")
     print("")
 
+
+#####################################################################################
+# THIS FUNCTION DISPLAYS INSTRUCTIONS FOR THE 'UPDATE' COMMAND
+#####################################################################################
 def update_instructions():
     print("   ____________________________________________________")
     print("  |                                                    |")
@@ -568,9 +621,10 @@ def create_new_user():
 
     # check if new_user_input is None
     try:
-        assert new_user_input != None, "Username is None, this should not happen"
+        assert new_user_input != None, "Critical error, username data type is invalid"
     except AssertionError as e:
         print(f"AssertionError: {e}")
+        print("Cannot create user at this time")
         return False
 
 
@@ -764,6 +818,7 @@ def show_passwords():
         uuid_list = PASSWORD_DIRECTORY[active_user_pub_hash]
     except KeyError:
         print("No passwords found for this user.")
+        return
 
 
     # create the lists for the UUIDs
@@ -773,6 +828,7 @@ def show_passwords():
     password_stars = []
 
     # iterate through the list of UUIDs, decrypt and organize the data
+    # IDE MAY GIVE WARNING BUT UUID IS ALREADY CHECKED FOR KEY ERRORS
     for uuid in uuid_list:
         # decrypt the UUID and append to respective list
         decrypted_uuid = decrypt_data(uuid, PRIV_KEY_TABLE[active_user_priv_hash])
@@ -821,6 +877,7 @@ def reveal_passwords():
         uuid_list = PASSWORD_DIRECTORY[active_user_pub_hash]
     except KeyError:
         print("No passwords found for this user.")
+        return
 
     # create the lists for the UUIDs
     uuid_plaintext = []
@@ -829,6 +886,7 @@ def reveal_passwords():
     password_stars = []
 
     # iterate through the list of UUIDs, decrypt and organize the data
+    # IDE MAY GIVE WARNING BUT THE CONDITION FOR KEY ERROR IS CHECKED BEFORE CREATING LISTS
     for uuid in uuid_list:
         # decrypt the UUID and append to respective list
         decrypted_uuid = decrypt_data(uuid, PRIV_KEY_TABLE[active_user_priv_hash])
@@ -872,6 +930,7 @@ def reveal_password_uuid(uuid):
     active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
     active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
 
+    # check uuid validity
     if validate_uuid(uuid, active_user_pub_hash, active_user_priv_hash):
         pass
     else:
@@ -977,6 +1036,10 @@ def print_password_table(uuid, name, username, password):
     #print the bottom bar
     print("  +" + "-" * (len(uuid_column[0]) + len(name_column[0]) + len(username_column[0]) + len(password_column[0]) - 1) + "+")
 
+
+#####################################################################################
+# THIS FUNCTION USED TOVALIDATE UUIDs
+#####################################################################################
 def validate_uuid(uuid, active_user_pub_hash, active_user_priv_hash):
     # check for errors, or to see if the uuid might not belong to the user.
     # if there is a KeyError or the uuid isn't in the password directory then
@@ -985,12 +1048,10 @@ def validate_uuid(uuid, active_user_pub_hash, active_user_priv_hash):
         try:
             for id in PASSWORD_DIRECTORY[active_user_pub_hash]:
                 if uuid == decrypt_data(id, PRIV_KEY_TABLE[active_user_priv_hash]):
-                    print("return true")
                     return True
         except KeyError:
             print("UUID not found for this user.")
             return
-    print("return False")
     return False
 
 
@@ -1003,6 +1064,7 @@ def delete_password(uuid):
     active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
     active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
 
+    # check uuid validity
     if validate_uuid(uuid, active_user_pub_hash, active_user_priv_hash):
         pass
     else:
@@ -1012,8 +1074,6 @@ def delete_password(uuid):
     # get the uuid hashes  
     uuid_512 = hashlib.sha512(uuid.encode('utf-8')).hexdigest()
     uuid_256 = hashlib.sha256(uuid.encode('utf-8')).hexdigest()
-
-    print("uuid_512:\n", uuid_512)
 
     # delete the data from the hashmaps
     del USERNAME_LIST[uuid_256]
@@ -1049,6 +1109,7 @@ def update_password(uuid):
     active_user_priv_hash = hashlib.sha512(ACTIVE_USER.encode('utf-8')).hexdigest()
     active_user_pub_hash = hashlib.sha256(ACTIVE_USER.encode('utf-8')).hexdigest()
 
+    # check uuid validity
     if validate_uuid(uuid, active_user_pub_hash, active_user_priv_hash):
         pass
     else:
@@ -1073,6 +1134,14 @@ def update_password(uuid):
             return
         else:
             print("Passwords do not match, please try again.")
+
+
+#####################################################################################
+#
+#####################################################################################
+def logged_out_user_using_logged_in_command():
+    print("You must be logged in to use this command")
+    print("Try using the 'start' command for information about how to get started")
 
 #####################################################################################
 #####################################################################################
@@ -1139,6 +1208,20 @@ def match_input(input_list):
                     login_user()
                 except KeyboardInterrupt:
                     print ("\nLogin cancelled.")
+            case "passwd":
+                logged_out_user_using_logged_in_command()           
+            case "logout":
+                logged_out_user_using_logged_in_command()
+            case "add":
+                logged_out_user_using_logged_in_command()
+            case "view":
+                logged_out_user_using_logged_in_command()
+            case "reveal":
+                logged_out_user_using_logged_in_command()
+            case "delete":
+                logged_out_user_using_logged_in_command()
+            case "update":
+                logged_out_user_using_logged_in_command()
 
     # OPTIONS FOR LOGGED IN USERS
     if LOGGED_IN == True:
@@ -1200,11 +1283,12 @@ def match_input(input_list):
 #####################################################################################
 #####################################################################################
 
+# instantiate the file manager
 FILE_MANAGER = FileManager()
+# bootstrap any files that exist in the directory from previous sessions
 FILE_MANAGER.bootstrap_files()
 
-
-
+# load the splashscreen for the user
 display_splashscreen()
 
 # using a try here so that I can except KeyboardInterrupt
